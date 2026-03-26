@@ -9,7 +9,7 @@ import OSLog
 struct CoreMLPredictionEngine: AIEngine {
 
     private let logger = Logger(
-        subsystem: "com.app.FoundationInsightsDemo",
+        subsystem: "com.aianalyticskit",
         category: "CoreMLPredictionEngine"
     )
 
@@ -23,18 +23,19 @@ struct CoreMLPredictionEngine: AIEngine {
         let userType = classifyBasedOnHeuristics(features)
         return UserPrediction(
             userType: userType,
-            confidence: 0.75
+            confidence: ClassificationConfig.coreMLModelConfidence
         )
     }
 
     // MARK: - Heuristic Fallback
 
     private func classifyBasedOnHeuristics(_ features: UserFeatures) -> UserType {
-        if features.errorRate > 0.3 {
+        if features.errorRate > ClassificationConfig.atRiskErrorRate {
             return .atRisk
-        } else if features.totalEvents > 50 && features.analysisCount > 10 {
+        } else if features.totalEvents > ClassificationConfig.powerUserMinEvents
+                    && features.analysisCount > ClassificationConfig.powerUserMinAnalyses {
             return .power
-        } else if features.uniqueScreens > 5 {
+        } else if features.uniqueScreens > ClassificationConfig.explorerMinScreens {
             return .explorer
         } else {
             return .casual

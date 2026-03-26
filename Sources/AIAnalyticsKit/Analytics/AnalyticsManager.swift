@@ -9,7 +9,7 @@ actor AnalyticsManager: AnalyticsTracking {
 
     private let store: any EventStore
     private let logger = Logger(
-        subsystem: "com.aianalyticskit.demo",
+        subsystem: "com.aianalyticskit",
         category: "AnalyticsManager"
     )
 

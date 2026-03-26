@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import Observation
 
 // MARK: - ViewModel
@@ -15,6 +16,7 @@ public final class HomeViewModel {
 
     // MARK: - Dependencies
 
+    private let logger = Logger(subsystem: "com.aianalyticskit", category: "HomeViewModel")
     private let analyticsManager: AnalyticsManager
     private let featureBuilder: any FeatureBuilding
     private let aiEngine: any AIEngine
@@ -60,7 +62,14 @@ public final class HomeViewModel {
             let config = personalizationEngine.configure(for: prediction)
             viewState = .ready(config, prediction)
         } catch {
-            viewState = .failure(error.localizedDescription)
+            logger.error("Prediction pipeline failed: \(error)")
+            let message: String
+            if error is CancellationError {
+                message = String(localized: "Analysis was interrupted. Please try again.")
+            } else {
+                message = String(localized: "Unable to load insights. Please try again.")
+            }
+            viewState = .failure(message)
         }
     }
 

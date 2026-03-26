@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import SwiftData
 
 // MARK: - DI Container
@@ -19,16 +20,32 @@ public enum AIAnalyticsContainer {
 
     public static let modelContainer: ModelContainer = {
         let schema = Schema([AnalyticsEventModel.self])
-        let configuration = ModelConfiguration(
+        let logger = Logger(subsystem: "com.aianalyticskit", category: "Container")
+
+        // Attempt persistent on-disk store first.
+        let persistentConfig = ModelConfiguration(
             "AIAnalytics",
             schema: schema,
             isStoredInMemoryOnly: false
         )
-        do {
-            return try ModelContainer(for: schema, configurations: [configuration])
-        } catch {
-            fatalError("Failed to create ModelContainer: \(error)")
+        if let container = try? ModelContainer(for: schema, configurations: [persistentConfig]) {
+            return container
         }
+
+        // Persistent store failed (disk full, permissions, corruption, etc.).
+        // Fall back to an in-memory store so the app remains functional.
+        // Events will not survive a restart in this mode.
+        logger.error("Persistent ModelContainer unavailable — falling back to in-memory store. Events will not persist across restarts.")
+        let memoryConfig = ModelConfiguration(
+            "AIAnalytics-Memory",
+            schema: schema,
+            isStoredInMemoryOnly: true
+        )
+        guard let fallback = try? ModelContainer(for: schema, configurations: [memoryConfig]) else {
+            // Both stores failed — nothing we can do.
+            fatalError("AIAnalyticsKit: Cannot create any ModelContainer. This is unrecoverable.")
+        }
+        return fallback
     }()
 
     // MARK: - Factory Methods

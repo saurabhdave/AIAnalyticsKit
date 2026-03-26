@@ -10,7 +10,7 @@ import OSLog
 struct FoundationPredictionEngine: AIEngine {
 
     private let logger = Logger(
-        subsystem: "com.app.FoundationInsightsDemo",
+        subsystem: "com.aianalyticskit",
         category: "FoundationPredictionEngine"
     )
 
@@ -43,22 +43,23 @@ struct FoundationPredictionEngine: AIEngine {
             responseText.localizedCaseInsensitiveContains($0.rawValue)
         } ?? .casual
 
-        return UserPrediction(userType: userType, confidence: 0.85)
+        return UserPrediction(userType: userType, confidence: ClassificationConfig.foundationModelConfidence)
     }
 
     // MARK: - Heuristic Fallback
 
     private func heuristicPrediction(from features: UserFeatures) -> UserPrediction {
         let userType: UserType
-        if features.errorRate > 0.3 {
+        if features.errorRate > ClassificationConfig.atRiskErrorRate {
             userType = .atRisk
-        } else if features.totalEvents > 50 && features.analysisCount > 10 {
+        } else if features.totalEvents > ClassificationConfig.powerUserMinEvents
+                    && features.analysisCount > ClassificationConfig.powerUserMinAnalyses {
             userType = .power
-        } else if features.uniqueScreens > 5 {
+        } else if features.uniqueScreens > ClassificationConfig.explorerMinScreens {
             userType = .explorer
         } else {
             userType = .casual
         }
-        return UserPrediction(userType: userType, confidence: 0.6)
+        return UserPrediction(userType: userType, confidence: ClassificationConfig.heuristicFallbackConfidence)
     }
 }
