@@ -1,6 +1,7 @@
 # SPM
 .build/
 .swiftpm/
+*.resolved
 
 # Xcode
 xcuserdata/
@@ -8,7 +9,11 @@ DerivedData/
 *.xcodeproj/xcuserdata/
 *.xcworkspace/xcuserdata/
 *.xcworkspace/xcshareddata/swiftpm/Package.resolved
+*.xcodeproj/project.xcworkspace/xcshareddata/
 
 # macOS
 .DS_Store
 **/.DS_Store
+
+# CI artifacts
+release_notes.md
