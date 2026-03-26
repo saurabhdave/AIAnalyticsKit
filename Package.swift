@@ -21,5 +21,13 @@ let package = Package(
                 .swiftLanguageMode(.v6)
             ]
         ),
+        .testTarget(
+            name: "AIAnalyticsKitTests",
+            dependencies: ["AIAnalyticsKit"],
+            path: "Tests/AIAnalyticsKitTests",
+            swiftSettings: [
+                .swiftLanguageMode(.v6)
+            ]
+        ),
     ]
 )
