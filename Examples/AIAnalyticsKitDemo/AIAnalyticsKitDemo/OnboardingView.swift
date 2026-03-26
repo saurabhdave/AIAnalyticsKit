@@ -64,7 +64,10 @@ struct OnboardingView: View {
                             .tag(index)
                     }
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
+                #if !os(macOS)
+                .tabViewStyle(.page)
+                .indexViewStyle(.page(backgroundDisplayMode: .never))
+                #endif
                 .frame(maxHeight: 460)
 
                 Spacer()

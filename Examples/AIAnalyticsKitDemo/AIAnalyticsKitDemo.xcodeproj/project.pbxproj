@@ -7,18 +7,20 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A3323C162F75D3E700E89347 /* PersonalizationTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3323C152F75D3E700E89347 /* PersonalizationTab.swift */; };
 		AA000000000000000000001A /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000001B /* App.swift */; };
 		AA000000000000000000002A /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000002B /* ContentView.swift */; };
 		AA000000000000000000003A /* EventsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000003B /* EventsTab.swift */; };
+		AA000000000000000000006A /* AIAnalyticsKit in Frameworks */ = {isa = PBXBuildFile; productRef = AA000000000000000000006B /* AIAnalyticsKit */; };
 		AA000000000000000000007A /* FeaturesTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000007B /* FeaturesTab.swift */; };
 		AA000000000000000000008A /* AIEngineTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000008B /* AIEngineTab.swift */; };
 		AA000000000000000000009A /* UserTypesTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000009B /* UserTypesTab.swift */; };
 		AA00000000000000000000AA /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000000AB /* OnboardingView.swift */; };
 		AA00000000000000000000BA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000000BB /* SettingsView.swift */; };
-		AA000000000000000000006A /* AIAnalyticsKit in Frameworks */ = {isa = PBXBuildFile; productRef = AA000000000000000000006B /* AIAnalyticsKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A3323C152F75D3E700E89347 /* PersonalizationTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalizationTab.swift; sourceTree = "<group>"; };
 		AA000000000000000000001B /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
 		AA000000000000000000002B /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		AA000000000000000000003B /* EventsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventsTab.swift; sourceTree = "<group>"; };
@@ -63,6 +65,7 @@
 				AA000000000000000000008B /* AIEngineTab.swift */,
 				AA000000000000000000009B /* UserTypesTab.swift */,
 				AA00000000000000000000F0 /* Info.plist */,
+				A3323C152F75D3E700E89347 /* PersonalizationTab.swift */,
 			);
 			path = AIAnalyticsKitDemo;
 			sourceTree = "<group>";
@@ -149,6 +152,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA000000000000000000001A /* App.swift in Sources */,
+				A3323C162F75D3E700E89347 /* PersonalizationTab.swift in Sources */,
 				AA000000000000000000002A /* ContentView.swift in Sources */,
 				AA00000000000000000000AA /* OnboardingView.swift in Sources */,
 				AA00000000000000000000BA /* SettingsView.swift in Sources */,

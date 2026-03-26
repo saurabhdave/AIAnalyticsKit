@@ -5,322 +5,173 @@ import AIAnalyticsKit
 
 struct PersonalizationTab: View {
 
-    @Environment(HomeViewModel.self) private var viewModel
-
     let flagRegistry: FeatureFlagRegistry
     let experimentEngine: ExperimentEngine
 
-    // Cached results from async actor calls, refreshed after each prediction.
+    @Environment(HomeViewModel.self) private var viewModel
+
     @State private var flagStates: [String: Bool] = [:]
-    @State private var assignments: [String: ExperimentAssignment] = [:]
+    @State private var experimentAssignments: [String: ExperimentAssignment] = [:]
 
-    private let demoFlags: [(key: String, label: String, icon: String, color: Color, eligibleTypes: String)] = [
-        (FeatureFlagKey.batchProcessing,  "Batch Processing",  "square.stack.3d.up.fill",               .purple, "Power"),
-        (FeatureFlagKey.exportReport,     "Export Report",     "doc.richtext",                          .blue,   "Power · Explorer"),
-        (FeatureFlagKey.advancedFilters,  "Advanced Filters",  "line.3.horizontal.decrease.circle.fill", .teal,   "Power · Explorer"),
-        (FeatureFlagKey.reEngagement,     "Re-Engagement",     "star.fill",                             .orange, "At-Risk"),
-    ]
-
-    private let demoExperimentKeys = ["dashboard_layout", "onboarding_flow", "cta_copy"]
+    private var currentType: UserType? {
+        viewModel.viewState.prediction?.userType
+    }
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
-                if viewModel.viewState.prediction == nil {
-                    noPredictionCard
-                }
+            VStack(spacing: 16) {
+                headerCard
                 featureFlagsCard
-                abTestingCard
-                realTimeAdaptationCard
+                experimentsCard
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
-            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: viewModel.viewState.prediction?.userType)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Re-evaluate flags and experiments whenever the user type changes.
-        .task(id: viewModel.viewState.prediction?.userType) {
-            await refreshState()
+        .task(id: currentType) {
+            await refreshFlagStates()
+            await refreshExperimentAssignments()
         }
     }
 
-    // MARK: - No Prediction Placeholder
+    // MARK: - Header
 
-    private var noPredictionCard: some View {
+    private var headerCard: some View {
         CardContainer {
-            VStack(spacing: 14) {
-                Image(systemName: "person.crop.circle.badge.questionmark.fill")
-                    .font(.system(size: 36))
-                    .foregroundStyle(.quaternary)
-                VStack(spacing: 6) {
-                    Text("No Prediction Yet")
-                        .font(.headline)
-                    Text("Go to the Insights tab and tap Refresh, or log some events via the Events tab. Feature flags and experiments will evaluate automatically once a prediction is available.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
+            VStack(alignment: .leading, spacing: 8) {
+                SectionHeader(icon: "slider.horizontal.3", title: "Personalization")
+                Text("AI-driven feature flags and A/B test assignments based on the current user classification.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                if let type = currentType {
+                    HStack(spacing: 6) {
+                        Image(systemName: "scope")
+                            .imageScale(.small)
+                        Text("Current type: ")
+                            .font(.caption)
+                        Text(type.rawValue)
+                            .font(.caption.weight(.semibold))
+                    }
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 2)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
         }
     }
 
-    // MARK: - Feature Flags Card
+    // MARK: - Feature Flags
 
     private var featureFlagsCard: some View {
         CardContainer {
             VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    SectionHeader(icon: "flag.fill", title: "AI-Driven Feature Flags")
-                    Spacer()
-                    if let userType = viewModel.viewState.prediction?.userType {
-                        UserTypePill(userType: userType)
-                    }
-                }
+                SectionHeader(icon: "flag.fill", title: "Feature Flags")
 
-                Text("Flags are evaluated against the current AI prediction. Eligibility is determined by user type and minimum confidence threshold.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                VStack(spacing: 0) {
-                    ForEach(demoFlags, id: \.key) { flag in
-                        FlagRow(
-                            label: flag.label,
-                            icon: flag.icon,
-                            color: flag.color,
-                            eligibleTypes: flag.eligibleTypes,
-                            isEnabled: flagStates[flag.key] ?? false
-                        )
-                        if flag.key != demoFlags.last?.key {
-                            Divider().padding(.leading, 36)
-                        }
+                if flagStates.isEmpty {
+                    Text("Run the AI pipeline on the Insights tab to evaluate flags.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(flagStates.sorted(by: { $0.key < $1.key }), id: \.key) { key, enabled in
+                        FlagRow(key: key, isEnabled: enabled)
                     }
                 }
             }
         }
     }
 
-    // MARK: - A/B Testing Card
+    // MARK: - Experiments
 
-    private var abTestingCard: some View {
+    private var experimentsCard: some View {
         CardContainer {
             VStack(alignment: .leading, spacing: 14) {
-                SectionHeader(icon: "arrow.triangle.branch", title: "AI-Driven A/B Tests")
+                SectionHeader(icon: "flask.fill", title: "A/B Experiments")
 
-                Text("Variant assignments are determined by the user's AI classification. Assignments are stable — the same user always receives the same variant.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                VStack(spacing: 0) {
-                    ForEach(demoExperimentKeys, id: \.self) { key in
-                        ExperimentRow(
-                            experimentKey: key,
-                            assignment: assignments[key]
-                        )
-                        if key != demoExperimentKeys.last {
-                            Divider().padding(.leading, 36)
-                        }
+                if experimentAssignments.isEmpty {
+                    Text("Run the AI pipeline on the Insights tab to resolve experiment assignments.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(experimentAssignments.sorted(by: { $0.key < $1.key }), id: \.key) { key, assignment in
+                        ExperimentRow(assignment: assignment)
                     }
                 }
             }
         }
     }
 
-    // MARK: - Real-Time Adaptation Card
+    // MARK: - Data Loading
 
-    private var realTimeAdaptationCard: some View {
-        CardContainer {
-            VStack(alignment: .leading, spacing: 14) {
-                SectionHeader(icon: "waveform.path.ecg.rectangle.fill", title: "Real-Time Adaptation")
-
-                VStack(spacing: 10) {
-                    AdaptationRow(
-                        icon: "timer",
-                        color: .blue,
-                        title: "Debounced Pipeline",
-                        detail: "Events are batched — the AI pipeline fires 2 s after the last event, not after every single event."
-                    )
-                    Divider().padding(.leading, 36)
-                    AdaptationRow(
-                        icon: "bolt.horizontal.fill",
-                        color: .purple,
-                        title: "Automatic Re-Evaluation",
-                        detail: "Feature flags and experiment variants update instantly when a new prediction is ready — no manual refresh needed."
-                    )
-                    Divider().padding(.leading, 36)
-                    AdaptationRow(
-                        icon: "dot.radiowaves.right",
-                        color: .green,
-                        title: "AsyncStream Output",
-                        detail: "viewModel.configurationStream emits a UIConfiguration value after each successful pipeline run for reactive consumers."
-                    )
-                }
-
-                if let prediction = viewModel.viewState.prediction {
-                    Divider()
-                    HStack(spacing: 5) {
-                        Image(systemName: "clock.fill").imageScale(.small)
-                        Text("Last prediction: \(prediction.generatedAt, style: .relative) ago · \(Int(prediction.confidence * 100))% confidence")
-                            .font(.caption2)
-                    }
-                    .foregroundStyle(.tertiary)
-                }
-            }
+    private func refreshFlagStates() async {
+        let keys = [
+            FeatureFlagKey.batchProcessing,
+            FeatureFlagKey.exportReport,
+            FeatureFlagKey.advancedFilters,
+            FeatureFlagKey.reEngagement,
+        ]
+        var states: [String: Bool] = [:]
+        for key in keys {
+            states[key] = await flagRegistry.isEnabled(key)
         }
+        flagStates = states
     }
 
-    // MARK: - State Refresh
-
-    private func refreshState() async {
-        for flag in demoFlags {
-            flagStates[flag.key] = await flagRegistry.isEnabled(flag.key)
+    private func refreshExperimentAssignments() async {
+        let keys = ["dashboard_layout", "onboarding_flow", "cta_copy"]
+        var assignments: [String: ExperimentAssignment] = [:]
+        for key in keys {
+            if let assignment = await experimentEngine.assignment(for: key) {
+                assignments[key] = assignment
+            }
         }
-        for key in demoExperimentKeys {
-            assignments[key] = await experimentEngine.assignment(for: key)
-        }
+        experimentAssignments = assignments
     }
 }
 
 // MARK: - Supporting Views
 
 private struct FlagRow: View {
-    let label: String
-    let icon: String
-    let color: Color
-    let eligibleTypes: String
+    let key: String
     let isEnabled: Bool
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundStyle(isEnabled ? color : .secondary)
-                .frame(width: 24)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(.subheadline.weight(isEnabled ? .semibold : .regular))
-                    .foregroundStyle(isEnabled ? .primary : .secondary)
-                Text("Eligible: \(eligibleTypes)")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-
+            Image(systemName: isEnabled ? "checkmark.circle.fill" : "xmark.circle")
+                .foregroundStyle(isEnabled ? .green : .secondary)
+                .frame(width: 20)
+            Text(key)
+                .font(.subheadline)
             Spacer()
-
-            HStack(spacing: 5) {
-                Circle()
-                    .fill(isEnabled ? color : Color.secondary.opacity(0.3))
-                    .frame(width: 7, height: 7)
-                Text(isEnabled ? "ON" : "OFF")
-                    .font(.caption.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(isEnabled ? color : .secondary)
-            }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 4)
-            .glassEffect(.regular.tint(isEnabled ? color : .clear), in: .capsule)
+            Text(isEnabled ? "Enabled" : "Disabled")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(isEnabled ? .green : .secondary)
         }
-        .padding(.vertical, 8)
-        .contentShape(Rectangle())
     }
 }
 
 private struct ExperimentRow: View {
-    let experimentKey: String
-    let assignment: ExperimentAssignment?
-
-    var variantColor: Color {
-        guard let v = assignment?.variant else { return .secondary }
-        switch v {
-        case "advanced", "simplified", "run_analysis": return .purple
-        case "grid", "explore_more": return .teal
-        case "get_started": return .orange
-        case "standard", "default", "learn_more": return .secondary
-        default: return .blue
-        }
-    }
+    let assignment: ExperimentAssignment
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "arrow.triangle.branch")
-                .foregroundStyle(assignment != nil ? variantColor : .secondary)
-                .frame(width: 24)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(experimentKey.replacingOccurrences(of: "_", with: " ").capitalized)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(assignment.experimentKey)
                     .font(.subheadline.weight(.medium))
-                if let userType = assignment?.userType {
-                    Text("Classified as \(userType.rawValue)")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                } else {
-                    Text("Pending prediction")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
+                Spacer()
+                Text(assignment.variant)
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .foregroundStyle(.purple)
+                    .glassEffect(.regular.tint(.purple))
             }
-
-            Spacer()
-
-            Text(assignment?.variant ?? "—")
-                .font(.caption.weight(.semibold).monospaced())
-                .foregroundStyle(variantColor)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 4)
-                .glassEffect(.regular.tint(assignment != nil ? variantColor : .clear), in: .capsule)
-        }
-        .padding(.vertical, 8)
-    }
-}
-
-private struct AdaptationRow: View {
-    let icon: String
-    let color: Color
-    let title: String
-    let detail: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon)
-                .foregroundStyle(color)
-                .frame(width: 24)
-                .padding(.top, 1)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.subheadline.weight(.medium))
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 16) {
+                Label("\(assignment.userType.rawValue)", systemImage: "person.fill")
+                Label("\(Int(assignment.confidence * 100))%", systemImage: "chart.bar.fill")
             }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
         }
-    }
-}
-
-private struct UserTypePill: View {
-    let userType: UserType
-
-    private var color: Color {
-        switch userType {
-        case .power:   return .purple
-        case .casual:  return .blue
-        case .explorer: return .teal
-        case .atRisk:  return .orange
-        }
-    }
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: userType.icon).imageScale(.small)
-            Text(userType.rawValue)
-                .font(.caption.weight(.medium))
-        }
-        .foregroundStyle(color)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 4)
-        .glassEffect(.regular.tint(color), in: .capsule)
+        .padding(.vertical, 2)
     }
 }
 

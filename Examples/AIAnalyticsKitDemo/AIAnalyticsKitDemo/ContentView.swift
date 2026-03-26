@@ -88,12 +88,15 @@ struct ContentView: View {
                         }
                     }
             }
+            #if os(macOS)
+            .frame(minWidth: 450, minHeight: 500)
+            #endif
         }
     }
 
     @ToolbarContentBuilder
     private var settingsToolbarItem: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
+        ToolbarItem(placement: .automatic) {
             Button {
                 showSettings = true
             } label: {
