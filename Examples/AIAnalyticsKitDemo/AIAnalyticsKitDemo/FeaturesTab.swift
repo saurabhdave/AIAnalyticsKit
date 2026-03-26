@@ -60,29 +60,29 @@ struct FeaturesTab: View {
                     name: "Total Events",
                     value: "\(features.totalEvents)",
                     progress: min(Double(features.totalEvents) / 100.0, 1.0),
-                    statusLabel: features.totalEvents > 50 ? "High" : features.totalEvents > 10 ? "Moderate" : "Low",
-                    statusColor: features.totalEvents > 50 ? .green : features.totalEvents > 10 ? .orange : .red
+                    statusLabel: features.totalEvents > ClassificationConfig.powerUserMinEvents ? "High" : features.totalEvents > 10 ? "Moderate" : "Low",
+                    statusColor: features.totalEvents > ClassificationConfig.powerUserMinEvents ? .green : features.totalEvents > 10 ? .orange : .red
                 )
                 FeatureMetricRow(
                     name: "Unique Screens",
                     value: "\(features.uniqueScreens)",
                     progress: min(Double(features.uniqueScreens) / 10.0, 1.0),
-                    statusLabel: features.uniqueScreens > 5 ? "Explorer" : features.uniqueScreens > 2 ? "Normal" : "Low",
-                    statusColor: features.uniqueScreens > 5 ? .teal : features.uniqueScreens > 2 ? .orange : .red
+                    statusLabel: features.uniqueScreens > ClassificationConfig.explorerMinScreens ? "Explorer" : features.uniqueScreens > 2 ? "Normal" : "Low",
+                    statusColor: features.uniqueScreens > ClassificationConfig.explorerMinScreens ? .teal : features.uniqueScreens > 2 ? .orange : .red
                 )
                 FeatureMetricRow(
                     name: "Analysis Count",
                     value: "\(features.analysisCount)",
                     progress: min(Double(features.analysisCount) / 20.0, 1.0),
-                    statusLabel: features.analysisCount > 10 ? "Power" : features.analysisCount > 3 ? "Active" : "Low",
-                    statusColor: features.analysisCount > 10 ? .purple : features.analysisCount > 3 ? .orange : .secondary
+                    statusLabel: features.analysisCount > ClassificationConfig.powerUserMinAnalyses ? "Power" : features.analysisCount > 3 ? "Active" : "Low",
+                    statusColor: features.analysisCount > ClassificationConfig.powerUserMinAnalyses ? .purple : features.analysisCount > 3 ? .orange : .secondary
                 )
                 FeatureMetricRow(
                     name: "Error Rate",
                     value: "\(Int(features.errorRate * 100))%",
                     progress: min(features.errorRate / 0.5, 1.0),
-                    statusLabel: features.errorRate > 0.3 ? "At-Risk" : features.errorRate > 0.1 ? "Watch" : "Healthy",
-                    statusColor: features.errorRate > 0.3 ? .red : features.errorRate > 0.1 ? .orange : .green
+                    statusLabel: features.errorRate > ClassificationConfig.atRiskErrorRate ? "At-Risk" : features.errorRate > 0.1 ? "Watch" : "Healthy",
+                    statusColor: features.errorRate > ClassificationConfig.atRiskErrorRate ? .red : features.errorRate > 0.1 ? .orange : .green
                 )
 
                 Divider()
@@ -124,17 +124,17 @@ struct FeaturesTab: View {
                     ThresholdRow(
                         icon: "exclamationmark.triangle.fill", color: .orange,
                         userType: "At-Risk",
-                        rule: "Error Rate > 30%"
+                        rule: "Error Rate > \(Int(ClassificationConfig.atRiskErrorRate * 100))%"
                     )
                     ThresholdRow(
                         icon: "bolt.fill", color: .purple,
                         userType: "Power User",
-                        rule: "Total Events > 50 AND Analyses > 10"
+                        rule: "Total Events > \(ClassificationConfig.powerUserMinEvents) AND Analyses > \(ClassificationConfig.powerUserMinAnalyses)"
                     )
                     ThresholdRow(
                         icon: "safari.fill", color: .teal,
                         userType: "Explorer",
-                        rule: "Unique Screens > 5"
+                        rule: "Unique Screens > \(ClassificationConfig.explorerMinScreens)"
                     )
                     ThresholdRow(
                         icon: "leaf.fill", color: .blue,

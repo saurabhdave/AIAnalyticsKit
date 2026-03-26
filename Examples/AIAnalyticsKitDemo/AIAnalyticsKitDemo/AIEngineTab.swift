@@ -157,7 +157,7 @@ struct AIEngineTab: View {
                 icon: "exclamationmark.triangle.fill",
                 color: .red,
                 isActive: prediction.userType == .atRisk,
-                impact: features.errorRate > 0.3 ? .decisive : .neutral
+                impact: features.errorRate > ClassificationConfig.atRiskErrorRate ? .decisive : .neutral
             ),
             AttributionDriver(
                 id: "activity",
@@ -166,7 +166,7 @@ struct AIEngineTab: View {
                 icon: "bolt.fill",
                 color: .purple,
                 isActive: prediction.userType == .power,
-                impact: (features.totalEvents > 50 && features.analysisCount > 10) ? .decisive : .neutral
+                impact: (features.totalEvents > ClassificationConfig.powerUserMinEvents && features.analysisCount > ClassificationConfig.powerUserMinAnalyses) ? .decisive : .neutral
             ),
             AttributionDriver(
                 id: "screens",
@@ -175,7 +175,7 @@ struct AIEngineTab: View {
                 icon: "safari.fill",
                 color: .teal,
                 isActive: prediction.userType == .explorer,
-                impact: features.uniqueScreens > 5 ? .supporting : .neutral
+                impact: features.uniqueScreens > ClassificationConfig.explorerMinScreens ? .supporting : .neutral
             ),
             AttributionDriver(
                 id: "moderate",

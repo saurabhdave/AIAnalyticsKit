@@ -67,7 +67,9 @@ private struct UserTypeCard: View {
     let isExpanded: Bool
     let onTap: () -> Void
 
-    private var personalization: UIConfiguration { PersonalizationPreview.config(for: userType) }
+    private var personalization: UIConfiguration {
+        PersonalizationEngine().configure(for: UserPrediction(userType: userType, confidence: 1.0))
+    }
 
     var body: some View {
         CardContainer {
@@ -190,63 +192,18 @@ private struct UserTypeCard: View {
 
     private func classificationTrigger(for type: UserType) -> String {
         switch type {
-        case .atRisk:   return "Error rate exceeds 30% of all tracked events."
-        case .power:    return "More than 50 total events AND more than 10 analysis events."
-        case .explorer: return "More than 5 unique screens navigated (requires screen property on navigation events)."
-        case .casual:   return "No dominant signal — falls through all other thresholds."
-        }
-    }
-}
-
-// MARK: - Personalization Preview Helper
-
-/// Mirrors PersonalizationEngine output without depending on the internal type.
-private enum PersonalizationPreview {
-    static func config(for type: UserType) -> UIConfiguration {
-        switch type {
-        case .power:
-            return UIConfiguration(
-                greeting: "Welcome back, power user",
-                accentColor: .purple,
-                showAdvancedFeatures: true,
-                recommendedActions: [
-                    .init(title: "Batch Analysis", subtitle: "Analyze multiple log files at once", icon: "square.stack.3d.up.fill"),
-                    .init(title: "Export Report", subtitle: "Generate a detailed analysis report", icon: "doc.richtext"),
-                ]
-            )
-        case .casual:
-            return UIConfiguration(
-                greeting: "Welcome back",
-                accentColor: .blue,
-                showAdvancedFeatures: false,
-                recommendedActions: [
-                    .init(title: "Quick Scan", subtitle: "Analyze your most recent logs", icon: "bolt.fill"),
-                    .init(title: "Getting Started", subtitle: "Learn about log analysis basics", icon: "book.fill"),
-                ]
-            )
-        case .explorer:
-            return UIConfiguration(
-                greeting: "Discover something new",
-                accentColor: .teal,
-                showAdvancedFeatures: true,
-                recommendedActions: [
-                    .init(title: "Try Adapter Mode", subtitle: "Enable the enriched analysis path", icon: "sparkles"),
-                    .init(title: "Custom Filters", subtitle: "Filter logs by severity or module", icon: "line.3.horizontal.decrease.circle.fill"),
-                ]
-            )
         case .atRisk:
-            return UIConfiguration(
-                greeting: "We missed you!",
-                accentColor: .orange,
-                showAdvancedFeatures: false,
-                recommendedActions: [
-                    .init(title: "What's New", subtitle: "See the latest improvements", icon: "star.fill"),
-                    .init(title: "Quick Help", subtitle: "Get started in under a minute", icon: "questionmark.circle.fill"),
-                ]
-            )
+            return "Error rate exceeds \(Int(ClassificationConfig.atRiskErrorRate * 100))% of all tracked events."
+        case .power:
+            return "More than \(ClassificationConfig.powerUserMinEvents) total events AND more than \(ClassificationConfig.powerUserMinAnalyses) analysis events."
+        case .explorer:
+            return "More than \(ClassificationConfig.explorerMinScreens) unique screens navigated (requires screen property on navigation events)."
+        case .casual:
+            return "No dominant signal — falls through all other thresholds."
         }
     }
 }
+
 
 // MARK: - Preview
 
