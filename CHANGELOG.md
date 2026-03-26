@@ -8,6 +8,21 @@ This project follows [Semantic Versioning](https://semver.org) and the [Keep a C
 
 ## [Unreleased]
 
+### Added
+- **AI-driven feature flags** — `FeatureFlag`, `FeatureFlagRegistry` (actor): define named flags with per-`UserType` eligibility and minimum confidence thresholds; auto-evaluated after every prediction pipeline run
+- **AI-driven A/B testing** — `Experiment`, `ExperimentEngine` (actor), `ExperimentAssignment`: stable variant assignment per user type backed by a write-once cohort ID (`CohortIdentity`); first call per experiment automatically logs an `experiment_exposed` analytics event
+- **`FeatureFlagKey`** — predefined string constants (`batchProcessing`, `exportReport`, `advancedFilters`, `reEngagement`)
+- **`View.aiAnalytics(flagRegistry:experimentEngine:)`** — new overload of the scene modifier that wires feature flags and A/B testing into the prediction pipeline
+- **`AIAnalytics.isFeatureEnabled(_:) async -> Bool`** — static convenience method for querying flags
+- **`AIAnalytics.experimentVariant(for:) async -> ExperimentAssignment?`** — static convenience method for querying experiment variants
+- **`AIAnalyticsContainer.makeFeatureFlagRegistry()`** and **`makeExperimentEngine()`** — factory methods on the DI container
+- **Debounced real-time UI adaptation** — `trackEvent()` / `trackEvents()` / `trackSampleEvents()` now schedule a debounced `loadInsights()` (default 2 s) instead of running the pipeline synchronously after every event; configurable via `adaptationDebounceInterval` in `HomeViewModel.init`
+- **`HomeViewModel.configurationStream: AsyncStream<UIConfiguration>`** — yields a new `UIConfiguration` after every successful prediction; finishes on `clearAllEvents()`
+- **Demo app: Personalization tab** — new `PersonalizationTab` showing live feature flag ON/OFF states, experiment variant assignments, and real-time adaptation behaviour; registered with 4 demo flags and 3 demo experiments at launch
+
+### Fixed
+- **Shared `AnalyticsManager`** — `AIAnalytics.logEvent()` and `HomeViewModel` previously wrote to separate event stores; both now share `AIAnalyticsContainer.sharedAnalyticsManager`, so static fire-and-forget events are always visible to the AI pipeline
+
 ---
 
 ## [1.0.0] — 2026-03-26

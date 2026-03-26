@@ -14,7 +14,7 @@
 
 **On-device user behavior analytics and AI personalization — powered by Apple's Foundation Models**
 
-*Classify users · Extract features · Personalize UI — entirely on the Neural Engine. No server. No data egress.*
+*Classify users · Gate features · Run A/B tests · Adapt UI in real time — entirely on the Neural Engine. No server. No data egress.*
 
 </div>
 
@@ -27,6 +27,9 @@
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Feature Flags](#feature-flags)
+- [A/B Testing](#ab-testing)
+- [Real-Time UI Adaptation](#real-time-ui-adaptation)
 - [Use Cases & Scenarios](#use-cases--scenarios)
 - [Advanced Integration](#advanced-integration)
 - [Public API Reference](#public-api-reference)
@@ -41,14 +44,14 @@
 
 ## Overview
 
-AIAnalyticsKit is a Swift 6 library that brings AI-powered user segmentation and adaptive UI personalization to iOS and macOS — with zero network calls. It tracks user behavior, extracts a 6-dimension feature vector, runs inference via Apple's Foundation Models framework, and delivers a tailored `UIConfiguration` — all on the Neural Engine in under 200 ms.
+AIAnalyticsKit is a Swift 6 library that brings AI-powered user segmentation, adaptive UI personalization, feature flags, and A/B testing to iOS and macOS — with zero network calls. It tracks user behavior, extracts a 6-dimension feature vector, runs inference via Apple's Foundation Models framework, and delivers a tailored `UIConfiguration` — all on the Neural Engine in under 200 ms.
 
 ```
 Track events  ──►  Build features  ──►  Predict segment  ──►  Adapt your UI
      │                   │                     │                     │
-SwiftData           6-dimension            Foundation            Greeting ·
-persistence         feature vector         Models on             Accent color ·
-                                           Neural Engine         Recommended actions
+SwiftData           6-dimension            Foundation            Feature flags ·
+persistence         feature vector         Models on             A/B variants ·
+                                           Neural Engine         Personalized UI
 ```
 
 ---
@@ -65,6 +68,8 @@ Traditional personalization pipelines ship behavioral data to a remote server fo
 | Works offline            | ❌                    | ✅                   |
 | Privacy compliant        | Conditional           | ✅ By design         |
 | Adaptive UI              | ❌                    | ✅                   |
+| AI-driven feature flags  | ❌                    | ✅                   |
+| AI-driven A/B testing    | ❌                    | ✅                   |
 
 ---
 
@@ -161,6 +166,219 @@ if case .ready(let config, let prediction) = viewModel.viewState {
 ```
 
 Or drop in the ready-made `HomeView` — it handles state, personalization rendering, and the privacy badge automatically.
+
+---
+
+## Feature Flags
+
+AI-driven feature flags gate functionality based on the current on-device user classification. No remote config server — flags evaluate entirely against the local `UserPrediction`.
+
+### Setup
+
+```swift
+@main
+struct MyApp: App {
+    private let flags = AIAnalyticsContainer.makeFeatureFlagRegistry()
+
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .aiAnalytics(flagRegistry: flags)
+                .task { await registerFlags() }
+        }
+    }
+
+    private func registerFlags() async {
+        await flags.register([
+            // Only Power Users with ≥ 70% confidence unlock batch processing
+            FeatureFlag(
+                key: "batchProcessing",
+                enabledForUserTypes: [.power],
+                minimumConfidence: 0.7
+            ),
+            // Both Power and Explorer users can export reports
+            FeatureFlag(
+                key: "exportReport",
+                enabledForUserTypes: [.power, .explorer],
+                minimumConfidence: 0.5
+            ),
+            // Re-engagement banner shown only to At-Risk users
+            FeatureFlag(
+                key: "reEngagement",
+                enabledForUserTypes: [.atRisk],
+                minimumConfidence: 0.4
+            ),
+        ])
+    }
+}
+```
+
+Use `FeatureFlagKey` for the built-in key constants, or any `String` for custom keys.
+
+### Querying flags in views
+
+```swift
+struct BatchButton: View {
+    @Environment(HomeViewModel.self) private var viewModel
+    let flags: FeatureFlagRegistry
+    @State private var isEnabled = false
+
+    var body: some View {
+        Group {
+            if isEnabled {
+                Button("Batch Process") { /* … */ }
+            }
+        }
+        // Re-evaluates automatically whenever the user type changes
+        .task(id: viewModel.viewState.prediction?.userType) {
+            isEnabled = await flags.isEnabled("batchProcessing")
+        }
+    }
+}
+```
+
+### Usage scenarios
+
+| Flag | Eligible types | Scenario |
+|---|---|---|
+| `batchProcessing` | Power | Unlock batch export only for heavy users |
+| `exportReport` | Power, Explorer | Surface advanced tooling for engaged users |
+| `advancedFilters` | Power, Explorer | Progressive disclosure of complex UI |
+| `reEngagement` | At-Risk | Show win-back banner to users drifting away |
+
+---
+
+## A/B Testing
+
+AI-driven A/B tests assign users to experiment variants based on their on-device classification. Assignments are **stable** across launches (backed by a write-once cohort ID in `UserDefaults`) and **automatically tracked** — the first call to `assignment(for:)` logs an `experiment_exposed` analytics event.
+
+### Setup
+
+```swift
+@main
+struct MyApp: App {
+    private let experiments = AIAnalyticsContainer.makeExperimentEngine()
+
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .aiAnalytics(experimentEngine: experiments)
+                .task { await registerExperiments() }
+        }
+    }
+
+    private func registerExperiments() async {
+        await experiments.register(Experiment(
+            key: "dashboard_layout",
+            variantsByUserType: [.power: "advanced", .explorer: "grid"],
+            controlVariant: "standard"   // Casual and At-Risk receive this
+        ))
+        await experiments.register(Experiment(
+            key: "onboarding_flow",
+            variantsByUserType: [.atRisk: "simplified"],
+            controlVariant: "default"
+        ))
+    }
+}
+```
+
+### Querying variants in views
+
+```swift
+.task(id: viewModel.viewState.prediction?.userType) {
+    let assignment = await experiments.assignment(for: "dashboard_layout")
+    showAdvancedDashboard = assignment?.variant == "advanced"
+}
+```
+
+`ExperimentAssignment` carries the resolved `variant`, `userType`, `confidence`, and `assignedAt` timestamp.
+
+### Exposure tracking
+
+The first call to `assignment(for:)` per experiment key per session automatically logs:
+
+```
+AnalyticsEvent(
+    name: "experiment_exposed",
+    category: .interaction,
+    properties: ["experiment_key": "dashboard_layout", "variant": "advanced", "user_type": "Power User"]
+)
+```
+
+Exposure is reset when the user re-classifies (e.g., moves from Casual to Power), so every new variant assignment is recorded.
+
+### Usage scenarios
+
+| Experiment | Variants | Scenario |
+|---|---|---|
+| `dashboard_layout` | `advanced` / `grid` / `standard` | Show richer layouts to engaged users |
+| `onboarding_flow` | `simplified` / `default` | Reduce friction for at-risk users |
+| `cta_copy` | `run_analysis` / `explore_more` / `get_started` / `learn_more` | Match CTA language to user intent |
+
+### Combining flags and experiments
+
+Both can be wired in a single modifier call:
+
+```swift
+.aiAnalytics(flagRegistry: flags, experimentEngine: experiments)
+```
+
+---
+
+## Real-Time UI Adaptation
+
+Events tracked via `viewModel.trackEvent()` or `viewModel.trackEvents()` automatically schedule a debounced pipeline run. The UI adapts without any manual `loadInsights()` calls.
+
+### How it works
+
+```
+Event tracked
+    │
+    ▼  (cancels any pending timer)
+scheduleAdaptation()  ←  2 s debounce
+    │
+    ▼  (fires once after the quiet period)
+loadInsights()
+    │
+    ▼
+viewState = .ready(config, prediction)  →  SwiftUI re-renders
+    │
+    ▼
+flagRegistry.updatePrediction(prediction)    →  flag states refresh
+experimentEngine.updatePrediction(prediction) →  variant assignments refresh
+    │
+    ▼
+configurationStream.yield(config)  →  reactive consumers notified
+```
+
+Rapid event bursts (e.g., a user tapping through a flow) produce **one** pipeline run after the 2 s quiet period, not one run per event.
+
+### AsyncStream for reactive consumers
+
+```swift
+Task {
+    for await config in viewModel.configurationStream {
+        updateWidget(with: config)
+        updateWatchComplication(greeting: config.greeting)
+    }
+}
+```
+
+`configurationStream` is an `AsyncStream<UIConfiguration>` that yields after every successful prediction. The stream finishes when `clearAllEvents()` is called.
+
+### Custom debounce interval
+
+Pass a custom interval when constructing the ViewModel manually:
+
+```swift
+let viewModel = HomeViewModel(
+    analyticsManager: ...,
+    featureBuilder: ...,
+    aiEngine: ...,
+    personalizationEngine: ...,
+    adaptationDebounceInterval: .seconds(5)  // slower for battery-sensitive scenarios
+)
+```
 
 ---
 
@@ -273,9 +491,9 @@ The same protocol seams (`AIEngine`, `EventStore`, `FeatureBuilding`) work as te
 
 ## Advanced Integration
 
-### Manual event tracking with UI refresh
+### Manual event tracking with debounced refresh
 
-`AIAnalytics.logEvent()` is fire-and-forget — it persists events but does not refresh the insights UI. When you need the UI to update immediately after tracking:
+`AIAnalytics.logEvent()` is fire-and-forget — it persists events and the debounce timer takes care of refreshing the UI after a 2 s quiet period. Use `viewModel.trackEvent()` when you want to participate in the same debounce pipeline:
 
 ```swift
 @Environment(HomeViewModel.self) private var viewModel
@@ -286,14 +504,13 @@ Task {
         category: .analysis,
         properties: ["type": "deep_scan"]
     )
-    // viewState is refreshed automatically
+    // Pipeline runs automatically after the debounce period — no loadInsights() needed
 }
 ```
 
-Or log statically and refresh separately:
+To run the pipeline immediately (e.g., on an explicit Refresh button tap):
 
 ```swift
-AIAnalytics.logEvent("analysis_started", parameters: ["type": "deep_scan"])
 Task { await viewModel.loadInsights() }
 ```
 
@@ -306,6 +523,7 @@ let events: [AnalyticsEvent] = [
     AnalyticsEvent(name: "item_selected", category: .interaction,  properties: ["id": "42"]),
 ]
 await viewModel.trackEvents(events)
+// Debounce fires once 2 s after the batch completes
 ```
 
 ### Manual setup (without `.aiAnalytics()`)
@@ -339,9 +557,19 @@ The primary entry point. Works like Firebase Analytics — call from any file or
 AIAnalytics.logEvent(_ name: String, parameters: [String: Any] = [:])
 AIAnalytics.logScreenView(_ screenName: String, screenClass: String? = nil)
 
+// AI-driven feature flags
+AIAnalytics.isFeatureEnabled(_ key: String) async -> Bool
+
+// AI-driven A/B testing
+AIAnalytics.experimentVariant(for key: String) async -> ExperimentAssignment?
+
 // Advanced access
 AIAnalytics.modelContainer      // @MainActor — ModelContainer for SwiftData
 AIAnalytics.makeHomeViewModel() // @MainActor — fully wired HomeViewModel
+
+// Shared registries (set once before first use)
+AIAnalytics.flagRegistry: FeatureFlagRegistry?
+AIAnalytics.experimentEngine: ExperimentEngine?
 ```
 
 ---
@@ -349,13 +577,18 @@ AIAnalytics.makeHomeViewModel() // @MainActor — fully wired HomeViewModel
 ### `View.aiAnalytics()` — Scene Modifier
 
 ```swift
+// Basic — event tracking and adaptive UI only
 ContentView()
     .aiAnalytics()
+
+// With feature flags and A/B testing
+ContentView()
+    .aiAnalytics(flagRegistry: flags, experimentEngine: experiments)
 ```
 
 Injects into the SwiftUI environment:
 - `.modelContainer(AIAnalytics.modelContainer)` — persistent SwiftData store
-- `.environment(HomeViewModel)` — AI insights pipeline and event tracking
+- `.environment(HomeViewModel)` — AI insights pipeline, event tracking, flags, and experiments
 
 Idempotent — safe to call multiple times.
 
@@ -368,20 +601,73 @@ Idempotent — safe to call multiple times.
 **State**
 
 ```swift
-var viewState: HomeViewState        // .idle | .loading | .ready(config, prediction) | .failure(message)
-var eventCount: Int                 // total persisted events
-var recentEvents: [AnalyticsEvent]  // all events, newest first
-var currentFeatures: UserFeatures?  // last extracted feature vector
+var viewState: HomeViewState           // .idle | .loading | .ready(config, prediction) | .failure(message)
+var eventCount: Int                    // total persisted events
+var recentEvents: [AnalyticsEvent]     // all events, newest first
+var currentFeatures: UserFeatures?     // last extracted feature vector
+var configurationStream: AsyncStream<UIConfiguration>  // yields after every successful prediction
 ```
 
 **Actions**
 
 ```swift
-func loadInsights() async                              // run full pipeline: fetch → features → predict → personalize
-func trackEvent(name:category:properties:) async       // persist one event, then reload insights
-func trackEvents(_ events: [AnalyticsEvent]) async     // persist batch, then reload insights
+func loadInsights() async                              // run full pipeline immediately
+func trackEvent(name:category:properties:) async       // persist one event + schedule debounced refresh
+func trackEvents(_ events: [AnalyticsEvent]) async     // persist batch + schedule debounced refresh
 func trackSampleEvents() async                         // log 5 built-in sample events
-func clearAllEvents() async                            // delete all data and reset state
+func clearAllEvents() async                            // delete all data, reset state, finish stream
+```
+
+---
+
+### `FeatureFlag` · `FeatureFlagRegistry`
+
+```swift
+// Define a flag
+public struct FeatureFlag: Sendable {
+    public let key: String
+    public let enabledForUserTypes: Set<UserType>
+    public let minimumConfidence: Double          // default: 0.0
+
+    public func isEnabled(for prediction: UserPrediction) -> Bool
+}
+
+// Manage and query flags
+public actor FeatureFlagRegistry {
+    public func register(_ flag: FeatureFlag)
+    public func register(_ flags: [FeatureFlag])
+    public func isEnabled(_ key: String) -> Bool   // false if no prediction yet
+}
+```
+
+Built-in key constants in `FeatureFlagKey`: `batchProcessing`, `exportReport`, `advancedFilters`, `reEngagement`.
+
+---
+
+### `Experiment` · `ExperimentEngine` · `ExperimentAssignment`
+
+```swift
+// Define an experiment
+public struct Experiment: Sendable {
+    public let key: String
+    public let variantsByUserType: [UserType: String]
+    public let controlVariant: String               // default: "control"
+}
+
+// Manage experiments and resolve assignments
+public actor ExperimentEngine {
+    public func register(_ experiment: Experiment)
+    public func assignment(for experimentKey: String) async -> ExperimentAssignment?
+}
+
+// Assignment result
+public struct ExperimentAssignment: Sendable {
+    public let experimentKey: String
+    public let variant: String
+    public let userType: UserType
+    public let confidence: Double
+    public let assignedAt: Date
+}
 ```
 
 ---
@@ -565,12 +851,12 @@ Rules are evaluated in priority order. All thresholds are defined in `Classifica
 AIAnalytics.logEvent() / viewModel.trackEvent()
         │
         ▼
-AnalyticsManager (actor)
+AnalyticsManager (shared actor)
         │
         ▼
 SwiftDataEventStore (@ModelActor)     ← persistent SQLite, survives process restarts
         │
-        ▼  (on viewModel.loadInsights())
+        ▼  (debounced 2 s after last event, or immediate via loadInsights())
 FeatureBuilder.buildFeatures(from:)
         │   └─ UserFeatures (6-dimension vector)
         ▼
@@ -581,14 +867,18 @@ PersonalizationEngine.configure(for:)
         │   └─ UIConfiguration (greeting · color · actions)
         ▼
 HomeView / your SwiftUI views
+        │
+        ├─► FeatureFlagRegistry.updatePrediction()   →  isEnabled() refreshes
+        ├─► ExperimentEngine.updatePrediction()      →  assignment() refreshes
+        └─► configurationStream.yield(config)        →  AsyncStream consumers notified
 ```
 
 ### Module Layout
 
 ```
 Sources/AIAnalyticsKit/
-├── AIAnalytics.swift                  ← static facade (logEvent, logScreenView)
-├── SwiftUI+AIAnalytics.swift          ← .aiAnalytics() view modifier
+├── AIAnalytics.swift                  ← static facade (logEvent, isFeatureEnabled, experimentVariant)
+├── SwiftUI+AIAnalytics.swift          ← .aiAnalytics() view modifier (+ flagRegistry/experimentEngine overload)
 ├── AI/
 │   ├── AIEngine.swift                 ← prediction protocol
 │   ├── ClassificationConfig.swift     ← shared thresholds and confidence values
@@ -598,7 +888,7 @@ Sources/AIAnalyticsKit/
 │   └── UserType.swift
 ├── Analytics/
 │   ├── AnalyticsEvent.swift
-│   ├── AnalyticsManager.swift         ← actor; thread-safe event ingestion
+│   ├── AnalyticsManager.swift         ← actor; thread-safe event ingestion (shared singleton)
 │   └── AnalyticsTracking.swift        ← protocol for swapping backends
 ├── Storage/
 │   ├── EventStore.swift               ← persistence protocol
@@ -607,18 +897,27 @@ Sources/AIAnalyticsKit/
 ├── Features/
 │   ├── UserFeatures.swift
 │   └── FeatureBuilder.swift           ← events → 6-dimension feature vector
+├── FeatureFlags/
+│   ├── FeatureFlag.swift              ← flag definition and isEnabled(for:) predicate
+│   ├── FeatureFlagKey.swift           ← built-in key constants
+│   └── FeatureFlagRegistry.swift      ← actor registry; auto-updated after each prediction
+├── Experiments/
+│   ├── Experiment.swift               ← experiment definition (key → variant map)
+│   ├── ExperimentAssignment.swift     ← resolved variant result
+│   ├── ExperimentEngine.swift         ← actor engine; stable assignment + exposure tracking
+│   └── CohortIdentity.swift           ← write-once UserDefaults UUID for stable bucketing
 ├── Personalization/
 │   ├── UIConfiguration.swift
 │   └── PersonalizationEngine.swift    ← prediction → UIConfiguration
 ├── Presentation/
 │   ├── HomeView.swift                 ← ready-to-use SwiftUI component
-│   ├── HomeViewModel.swift            ← @Observable @MainActor orchestrator
+│   ├── HomeViewModel.swift            ← @Observable @MainActor orchestrator + debounce + AsyncStream
 │   ├── HomeViewState.swift
 │   ├── CardContainer.swift
 │   ├── SectionHeader.swift
 │   └── ErrorBanner.swift
 └── Container/
-    └── AIAnalyticsContainer.swift     ← composition root and DI factory
+    └── AIAnalyticsContainer.swift     ← composition root; sharedAnalyticsManager; all factory methods
 ```
 
 ---
@@ -627,13 +926,19 @@ Sources/AIAnalyticsKit/
 
 **Firebase-style static API** — `AIAnalytics.logEvent()` works from any file or actor without referencing a ViewModel. Fire-and-forget with no `await` required at call sites.
 
-**Swift 6 strict concurrency** — `AnalyticsManager` and `SwiftDataEventStore` are actors. All cross-actor boundaries are explicit. `.swiftLanguageMode(.v6)` is enforced in `Package.swift`.
+**Swift 6 strict concurrency** — `AnalyticsManager`, `SwiftDataEventStore`, `FeatureFlagRegistry`, and `ExperimentEngine` are all actors. All cross-actor boundaries are explicit. `.swiftLanguageMode(.v6)` is enforced in `Package.swift`.
 
 **`@ModelActor` for SwiftData** — database access happens on a dedicated actor, keeping the main thread free for UI work.
 
 **Explicit view state** — `HomeViewState` is a value-type enum. No ambiguous `isLoading + data` flag combinations.
 
 **Protocol seams everywhere** — `AIEngine`, `EventStore`, `FeatureBuilding`, `PersonalizationEngineProtocol`. Swap any layer with a custom or test implementation by injecting into `HomeViewModel.init`.
+
+**Debounced real-time adaptation** — `trackEvent()` / `trackEvents()` schedule a 2 s debounced `loadInsights()`. Rapid event bursts produce one pipeline run, not one per event. The interval is configurable.
+
+**AsyncStream output** — `HomeViewModel.configurationStream` is an `AsyncStream<UIConfiguration>` that yields after every successful prediction. Useful for widgets, watch complications, or any non-SwiftUI consumer.
+
+**Shared `AnalyticsManager`** — `AIAnalytics.logEvent()` and `HomeViewModel` share the same `AnalyticsManager` instance (`AIAnalyticsContainer.sharedAnalyticsManager`), so static fire-and-forget events are always visible to the AI pipeline.
 
 **Graceful degradation** — SwiftData persistent store failure falls back to an in-memory store. Foundation Models unavailability falls back to deterministic heuristics. The app remains functional in both cases.
 
@@ -651,15 +956,16 @@ xcodebuild \
   build
 ```
 
-| Screen            | What it demonstrates                                                                 |
-|-------------------|--------------------------------------------------------------------------------------|
-| **Onboarding**    | 3-page swipeable intro with privacy messaging                                        |
-| **Insights**      | Live `HomeView` — adaptive greeting, accent color, and recommended actions           |
-| **Events**        | Category breakdown, quick-log buttons, behavior simulators                           |
-| **Feature Vector**| Animated progress bars per `UserFeatures` dimension, classification threshold legend |
-| **AI Engine**     | Foundation Models info, confidence gauge, feature attribution, privacy guarantees    |
-| **User Types**    | Expandable cards for all 4 types — personalization preview and classification rules  |
-| **Settings**      | Engine info, live event count, clear data with confirmation                          |
+| Screen                | What it demonstrates                                                                        |
+|-----------------------|---------------------------------------------------------------------------------------------|
+| **Onboarding**        | 3-page swipeable intro with privacy messaging                                               |
+| **Insights**          | Live `HomeView` — adaptive greeting, accent color, and recommended actions                  |
+| **Events**            | Category breakdown, quick-log buttons, behavior simulators                                  |
+| **Feature Vector**    | Animated progress bars per `UserFeatures` dimension, classification threshold legend        |
+| **AI Engine**         | Foundation Models info, confidence gauge, feature attribution, privacy guarantees           |
+| **Personalization**   | Live feature flag ON/OFF states, A/B experiment variant assignments, real-time adaptation   |
+| **User Types**        | Expandable cards for all 4 types — personalization preview and classification rules         |
+| **Settings**          | Engine info, live event count, clear data with confirmation                                 |
 
 ---
 
