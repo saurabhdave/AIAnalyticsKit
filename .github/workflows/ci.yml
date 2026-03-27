@@ -33,7 +33,10 @@ jobs:
         run: swift build -c release
 
       - name: Run tests
-        run: swift test --parallel
+        run: |
+          xcodebuild test \
+            -scheme AIAnalyticsKit \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 
   lint:
     name: Swift Strict Concurrency
