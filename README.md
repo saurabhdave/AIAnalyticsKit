@@ -4,11 +4,9 @@
 
 <br/>
 
-<div align="center">
-  <img src="https://github.com/user-attachments/assets/3f16929d-bae8-4725-bd97-81fe4c203d6e" alt="AIAnalyticsKit" width="100%">
-</div>
+<img src="https://github.com/user-attachments/assets/3f16929d-bae8-4725-bd97-81fe4c203d6e" alt="AIAnalyticsKit" width="100%">
 
-
+<br/>
 
 [![CI](https://github.com/saurabhdave/AIAnalyticsKit/actions/workflows/ci.yml/badge.svg)](https://github.com/saurabhdave/AIAnalyticsKit/actions/workflows/ci.yml)
 [![Swift](https://img.shields.io/badge/Swift-6.0-F05138?style=flat-square&logo=swift&logoColor=white)](https://swift.org)
